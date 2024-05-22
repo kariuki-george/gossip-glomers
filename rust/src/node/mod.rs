@@ -1,5 +1,8 @@
 use crate::{events::*, transport::handleoutput};
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
 #[derive(Debug, Default)]
 pub struct Node {
@@ -8,6 +11,7 @@ pub struct Node {
     pub node_ids: Vec<String>,
     pub topology: HashMap<String, Vec<String>>,
     pub messages: Mutex<Vec<serde_json::Value>>,
+    pub topology_set: HashSet<String>, // Allows the node to have the whole topology without duplicates.
 }
 
 impl Node {
@@ -26,7 +30,9 @@ impl Node {
             Event::Unsupported { shared } => self.handle_unsupported_error(shared),
             Event::Topology { topology, shared } => self.handle_topology(topology, shared),
             Event::TopologyOk { .. } => None,
-            Event::Broadcast { broadcast, shared } => self.handle_broadcast(broadcast, shared),
+            Event::Broadcast { broadcast, shared } => {
+                self.handle_broadcast(broadcast, shared, &message)
+            }
             Event::BroadcastOk { .. } => None,
             Event::Read { read } => self.handle_read(read),
             Event::ReadOk {
@@ -95,7 +101,15 @@ impl Node {
     }
 
     fn handle_topology(&mut self, data: TopologyEvent, shared: SharedEvent) -> Option<Message> {
-        self.topology = data.topology;
+        self.topology.clone_from(&data.topology);
+
+        for node in data.topology {
+            self.topology_set.insert(node.0);
+
+            for node in node.1 {
+                self.topology_set.insert(node);
+            }
+        }
 
         Some(Message {
             dest: String::new(),
@@ -110,22 +124,33 @@ impl Node {
         })
     }
 
-    fn handle_broadcast(&mut self, data: BroadcastEvent, shared: SharedEvent) -> Option<Message> {
+    fn handle_broadcast(
+        &mut self,
+        data: BroadcastEvent,
+        shared: SharedEvent,
+        message: &Message,
+    ) -> Option<Message> {
         self.messages.lock().unwrap().push(data.message.clone());
 
-        // Broadcast to my topology else neigbouring nodes
-        if self.topology.is_empty() {
-            for node in self.node_ids.clone() {
-                self.broadcast(
-                    node,
-                    BroadcastEvent {
-                        message: data.message.clone(),
-                    },
-                )
-            }
-        } else {
-            for nodes in self.topology.clone().values() {
-                for node in nodes.clone() {
+        // To prevent the nodes from broadcasting the same message infinitely,
+        // if a node received a message from a client, it will broadcast.
+        // Else not.
+        // Though, if this node's topology doesn't cater for all nodes available,
+        //   some nodes might not receive the message necessitating other synchronizing mechanisms. possibly stateful mechanisms.
+
+        if message.src.contains('c') {
+            // Broadcast to my topology else neigbouring nodes
+            if self.topology.is_empty() {
+                for node in self.node_ids.clone() {
+                    self.broadcast(
+                        node,
+                        BroadcastEvent {
+                            message: data.message.clone(),
+                        },
+                    )
+                }
+            } else {
+                for node in self.topology_set.clone().into_iter() {
                     if node == self.node_id {
                         continue;
                     }
