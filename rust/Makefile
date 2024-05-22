@@ -1,13 +1,15 @@
 serve: 
 	./maelstrom/maelstrom serve
 
-echo-build:
-	cargo build  --bin echo  
+b:
+	cargo build    
 
-echo: echo-build
-	 ./target/debug/echo
+r: b
+	./target/debug/gossip-glommers
 
-m-echo: echo-build 
-	./maelstrom/maelstrom test -w echo --bin ./target/debug/echo --node-count 2 --time-limit 10  --log-stderr
+m: b 
+	./maelstrom/maelstrom test -w broadcast --bin ./target/debug/gossip-glommers --node-count 2 --time-limit 10  --log-stderr
 
+mp: b 
+	./maelstrom/maelstrom test -w broadcast --bin ./target/debug/gossip-glommers --node-count 6 --time-limit 20  --log-stderr
 
