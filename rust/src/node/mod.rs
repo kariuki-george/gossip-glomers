@@ -1,8 +1,5 @@
 use crate::{events::*, transport::handleoutput};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Mutex,
-};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct Node {
@@ -10,7 +7,7 @@ pub struct Node {
     pub node_id: String,
     pub node_ids: Vec<String>,
     pub topology: HashMap<String, Vec<String>>,
-    pub messages: Mutex<Vec<serde_json::Value>>,
+    pub messages: Vec<serde_json::Value>,
     pub topology_set: HashSet<String>, // Allows the node to have the whole topology without duplicates.
     pub id_counter: u64,
 }
@@ -55,7 +52,7 @@ impl Node {
                         in_reply_to: read.msg_id,
                     },
                     read_ok: ReadOkEvent {
-                        messages: self.messages.lock().unwrap().clone(),
+                        messages: self.messages.clone(),
                     },
                 },
             },
@@ -184,38 +181,33 @@ impl Node {
         shared: SharedEvent,
         message: &Message,
     ) -> Option<Message> {
-        self.messages.lock().unwrap().push(data.message.clone());
+        self.messages.push(data.message.clone());
 
         // To prevent the nodes from broadcasting the same message infinitely,
-        // if a node received a message from a client, it will broadcast.
-        // Else not.
-        // Though, if this node's topology doesn't cater for all nodes available,
-        //   some nodes might not receive the message necessitating other synchronizing mechanisms. possibly stateful mechanisms.
+        // A node will not broadcast back to the sender.
+        // The topology will guarantee that the message will be send to a node only once.
 
-        if message.src.contains('c') {
-            // Broadcast to my topology else neigbouring nodes
-            if self.topology.is_empty() {
-                for node in self.node_ids.clone() {
-                    self.broadcast(
-                        node,
-                        BroadcastEvent {
-                            message: data.message.clone(),
-                        },
-                    )
-                }
-            } else {
-                for node in self.topology_set.clone().into_iter() {
-                    if node == self.node_id {
-                        continue;
-                    }
-                    self.broadcast(
-                        node,
-                        BroadcastEvent {
-                            message: data.message.clone(),
-                        },
-                    )
-                }
+        // Considerations: Consider only storing the nodes to which the node will broadcast to.
+
+        for (node_id, node_ids) in self.topology.clone() {
+            if node_id != self.node_id {
+                continue;
             }
+
+            for node_id in node_ids {
+                // Don't sent the message back to source
+                if node_id == message.src {
+                    continue;
+                }
+                self.broadcast(
+                    node_id,
+                    BroadcastEvent {
+                        message: data.message.clone(),
+                    },
+                )
+            }
+            // No need to loop over the rest
+            break;
         }
 
         Some(Message {
