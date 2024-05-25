@@ -12,6 +12,7 @@ pub struct Node {
     pub topology: HashMap<String, Vec<String>>,
     pub messages: Mutex<Vec<serde_json::Value>>,
     pub topology_set: HashSet<String>, // Allows the node to have the whole topology without duplicates.
+    pub id_counter: u64,
 }
 
 impl Node {
@@ -39,6 +40,8 @@ impl Node {
                 event_response,
                 read_ok,
             } => self.handle_read_ok(event_response, read_ok),
+            Event::Generate { shared } => self.handle_generate(shared),
+            Event::GenerateOk { .. } => None,
         }
     }
 
@@ -97,7 +100,58 @@ impl Node {
                 event_response,
                 read_ok: _,
             } => event_response.in_reply_to,
+            Event::Generate { shared } => shared.msg_id,
+            Event::GenerateOk { .. } => 0,
         }
+    }
+
+    fn handle_error(&self, shared: SharedEvent) -> Option<Message> {
+        let err = Message {
+            dest: String::new(),
+            src: String::new(),
+            body: Body {
+                typ: Event::Error {
+                    event_response: EventResponse {
+                        in_reply_to: shared.msg_id,
+                    },
+                    error: ErrorEvent {
+                        code: 1003,
+                        text: "failed to generate id".to_string(),
+                    },
+                },
+            },
+        };
+        Some(err)
+    }
+
+    fn handle_generate(&mut self, shared: SharedEvent) -> Option<Message> {
+        // Generate a snowflake with the following parts
+        // Timestamp in milliseconds.
+        // The node identifier. A node can generate 1000 ids per second without any breaking uniqueness with other nodes
+        // A node's sequence. Ensure uniqueness within a node when it generates more than 1 id within the same millisecond.
+
+        let timestamp = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+            Ok(duration) => duration.as_millis(),
+            Err(_) => return self.handle_error(shared),
+        };
+
+        let snowflake = format!("{}-{}-{}", timestamp, self.node_id, self.id_counter);
+        let message = Message {
+            src: String::new(),
+            dest: String::new(),
+            body: Body {
+                typ: Event::GenerateOk {
+                    event_response: EventResponse {
+                        in_reply_to: shared.msg_id,
+                    },
+                    generate_ok: GenerateOk { id: snowflake },
+                },
+            },
+        };
+
+        self.id_counter += 1;
+
+        Some(message)
     }
 
     fn handle_topology(&mut self, data: TopologyEvent, shared: SharedEvent) -> Option<Message> {

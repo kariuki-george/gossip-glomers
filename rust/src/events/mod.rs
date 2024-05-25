@@ -83,6 +83,16 @@ pub enum Event {
         #[serde(flatten)]
         shared: SharedEvent,
     },
+    Generate {
+        #[serde(flatten)]
+        shared: SharedEvent,
+    },
+    GenerateOk {
+        #[serde(flatten)]
+        event_response: EventResponse,
+        #[serde(flatten)]
+        generate_ok: GenerateOk,
+    },
 }
 
 // Shared
@@ -101,6 +111,12 @@ pub struct EventResponse {
 pub struct ErrorEvent {
     pub code: u64,
     pub text: String,
+}
+
+// Generate Event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateOk {
+    pub id: String,
 }
 
 // Init
