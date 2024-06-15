@@ -229,7 +229,7 @@ impl Node {
             let id = match self.uid.generate_unique_id(self.node_id.as_str()).await {
                 Ok(id) => id,
                 Err(err) => {
-                    log::error!("failed to generate unique id: \n err: {:?}", err);
+                    eprintln!("failed to generate unique id: \n err: {:?}", err);
                     return None;
                 }
             };
