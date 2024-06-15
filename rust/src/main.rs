@@ -1,4 +1,4 @@
-use gossip_glommers::{node, transport::Transport};
+use gossip_glommers::{node::node::Node, transport::Transport};
 use std::io::BufRead;
 
 #[tokio::main]
@@ -7,7 +7,7 @@ async fn main() {
 
     let transport = Transport {};
 
-    let mut node = node::Node::new().await;
+    let mut node = Node::new().await;
 
     for line in input_lines.lines() {
         let line = line.unwrap();

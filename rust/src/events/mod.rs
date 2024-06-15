@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use tokio::time::Instant;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
