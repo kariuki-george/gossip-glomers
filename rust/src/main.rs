@@ -1,22 +1,25 @@
-use gossip_glommers::{
-    node,
-    transport::{self, handleoutput},
-};
+use gossip_glommers::{node, transport::Transport};
 use std::io::BufRead;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let input_lines: std::io::StdinLock<'_> = std::io::stdin().lock();
 
-    let mut node = node::Node::default();
+    let transport = Transport {};
+
+    let mut node = node::Node::new().await;
 
     for line in input_lines.lines() {
         let line = line.unwrap();
         // Try to deserialize the input into a struct
 
-        let message = transport::handleinput(line, &mut node);
+        let message = match transport.handleinput(line) {
+            Ok(message) => message,
+            Err(_) => continue,
+        };
 
         // Run the message event
-        let reply_message = node.runner(message.clone());
+        let reply_message = node.runner(message.clone()).await;
 
         // Check if to reply
         let mut reply_message = match reply_message {
@@ -32,6 +35,6 @@ fn main() {
         }
 
         // Response
-        handleoutput(reply_message, &mut node);
+        transport.handleoutput(reply_message);
     }
 }

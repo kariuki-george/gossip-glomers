@@ -1,11 +1,39 @@
-use crate::{events::Message, node::Node};
+use crate::events::Message;
 
-pub fn handleinput(input: String, node: &mut Node) -> Message {
-    serde_json::from_str::<Message>(&input)
-        .unwrap_or_else(|err| node.handle_deserialization_error(err))
+#[derive(Debug, Default)]
+pub struct Transport;
+
+impl Transport {
+    pub fn handleinput(&self, input: String) -> Result<Message, ()> {
+        let message = match serde_json::from_str::<Message>(&input) {
+            Ok(message) => message,
+            Err(err) => {
+                handle_deserialization_error(err, input);
+                return Err(());
+            }
+        };
+        Ok(message)
+    }
+    pub fn handleoutput(&self, message: Message) {
+        match serde_json::to_string(&message) {
+            Ok(output) => println!("{output}"),
+            Err(err) => handle_serialization_error(err, message),
+        };
+    }
 }
-pub fn handleoutput(message: Message, node: &mut Node) {
-    let output = serde_json::to_string(&message)
-        .unwrap_or_else(move |err| node.handle_serialization_error(err, message));
-    println!("{output}");
+
+fn handle_serialization_error(error: serde_json::Error, message: Message) {
+    log::error!(
+        "failed to serialize message: \n Message: {:?} \n err: {:?} ",
+        message,
+        error
+    )
+}
+
+fn handle_deserialization_error(error: serde_json::Error, input: String) {
+    log::warn!(
+        "failed to deserialize input: \n Input {} \n err {:?}",
+        input,
+        error
+    )
 }
