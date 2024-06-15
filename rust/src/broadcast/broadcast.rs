@@ -1,4 +1,4 @@
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{borrow::BorrowMut, collections::HashSet, sync::Arc};
 use tokio::sync::Mutex;
@@ -27,7 +27,7 @@ struct Service {
     store: Store,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct BMessage {
     data: Value,
     dest: String,
@@ -36,7 +36,6 @@ struct BMessage {
     broadcast_event_message_id: u64,
     // A broadcast message will have the same id across all nodes
     dist_message_id: String,
-    timestamp: tokio::time::Instant,
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -45,15 +44,6 @@ pub struct BroadCastMessage {
     pub dist_message_id: String,
     #[serde(rename(deserialize = "d"))]
     pub data: Value,
-}
-
-impl Default for BMessage {
-    fn default() -> Self {
-        BMessage {
-            timestamp: tokio::time::Instant::now(),
-            ..Default::default()
-        }
-    }
 }
 
 impl Broadcast {
@@ -68,16 +58,15 @@ impl Broadcast {
     pub async fn handle_broadcast(
         &mut self,
         parent_node_id: &str,
-        message: Value,
         src: &str,
         uid: &mut UID,
-        message_id: String,
+        payload: BroadCastMessage,
     ) {
         let mut service = self.service.lock().await;
         let service = service.borrow_mut();
 
         service
-            .handle_broadcast(parent_node_id, message, src, uid, message_id)
+            .handle_broadcast(parent_node_id, src, uid, payload)
             .await;
     }
     pub async fn set_topology(&mut self, nodes: Vec<String>) {
@@ -101,29 +90,27 @@ impl Service {
         Service { store }
     }
 
-    pub async fn set_topology(&mut self, nodes: Vec<String>) {
+    async fn set_topology(&mut self, nodes: Vec<String>) {
         for node_id in nodes {
             self.store.topology.insert(node_id);
         }
     }
 
-    pub async fn handle_broadcast(
+    async fn handle_broadcast(
         &mut self,
         parent_node_id: &str,
-        message: Value,
         src: &str,
         uid: &mut UID,
-        message_id: String,
+        payload: BroadCastMessage,
     ) {
         // To prevent the nodes from broadcasting the same message infinitely,
         // A node will not broadcast back to the sender.
-        // The topology already handles this in that a node cannot send a message back to the sender.
         // The topology will guarantee that the message will be send to a node only once.
 
         // However,
         // In the case of broadcast failures
-        // A background worker will be used for this task. it will resend events every 50 ms after they are send and if not broadcast_ok has been reveived.
-        let topology = self.store.topology.clone();
+        // A background worker will be used for this task. it will gossip unacked events every X ms after they are send.
+        let topology = &self.store.topology;
         let db = &mut self.store.db;
         let mut messages = vec![];
         for node_id in topology {
@@ -131,8 +118,8 @@ impl Service {
                 continue;
             }
             let broadcast_message = BMessage {
-                data: message.clone(),
-                dest: node_id,
+                data: payload.data.clone(),
+                dest: node_id.clone(),
                 broadcast_event_message_id: match uid.generate_int_unique_id().await {
                     Ok(id) => id,
                     Err(err) => {
@@ -140,9 +127,8 @@ impl Service {
                         continue;
                     }
                 },
-                dist_message_id: message_id.clone(),
+                dist_message_id: payload.dist_message_id.clone(),
                 src: parent_node_id.to_owned(),
-                timestamp: tokio::time::Instant::now(),
             };
             // Store the message
             db.add_message(
@@ -153,8 +139,10 @@ impl Service {
         }
 
         // Choose to send message immediately or gossip the messages in the worker below
+        // Get better latencies by choosing not to send the message immediately
+
         // for data in messages {
-        //     self.broadcast(data)
+        //      self.broadcast(data)
         // }
     }
 
@@ -166,8 +154,8 @@ impl Service {
         let m_string = json!({"d": data.data,"d_id":data.dist_message_id});
 
         let message = Message {
-            src: data.src.to_owned(),
-            dest: data.dest.to_owned(),
+            src: data.src,
+            dest: data.dest,
             body: Body {
                 typ: Event::Broadcast {
                     broadcast: BroadcastEvent { message: m_string },

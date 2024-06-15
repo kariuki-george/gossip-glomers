@@ -27,7 +27,7 @@ impl Node {
 
     pub async fn runner(&mut self, message: Message) -> Option<Message> {
         // Match the event type
-        match message.clone().body.typ {
+        match message.body.clone().typ {
             Event::Init { init, shared } => self.handle_init(init, shared),
             Event::InitOk { .. } => None,
             Event::Echo { echo, shared } => self.handle_echo(echo, shared),
@@ -189,9 +189,6 @@ impl Node {
         shared: SharedEvent,
         message: &Message,
     ) -> Option<Message> {
-        // TODO: SUPPORT DISTRIBUTED ID FOR MESSAGES
-        // Avoid duplicates
-
         // Internal broadcasts will broadcast message as object of
         // message and message_id
         let mut payload: BroadCastMessage = BroadCastMessage::default();
@@ -204,13 +201,10 @@ impl Node {
                 Ok(payload) => payload,
                 Err(err) => {
                     eprintln!(
-                        "{:?}{}{}{}",
-                        err,
-                        data.message,
-                        data.message.is_number(),
-                        data.message.is_object()
+                        "failed to cast broadcast object into BroadCastMessage. \n ERR: {:?}",
+                        err
                     );
-                    panic!();
+                    return None;
                 }
             };
 
@@ -236,17 +230,11 @@ impl Node {
 
             payload.data = data.message.clone();
             payload.dist_message_id.clone_from(&id);
-            self.db.add_message(id, data.message.to_owned());
+            self.db.add_message(id, data.message);
         };
 
         self.broadcast
-            .handle_broadcast(
-                &self.node_id,
-                payload.data,
-                &message.src,
-                &mut self.uid,
-                payload.dist_message_id,
-            )
+            .handle_broadcast(&self.node_id, &message.src, &mut self.uid, payload)
             .await;
 
         Some(Message {
