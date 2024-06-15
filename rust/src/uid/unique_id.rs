@@ -25,7 +25,7 @@ impl UID {
         let timestamp = match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
             Ok(duration) => duration.as_millis(),
             Err(_) => {
-                log::error!("failed to generate timestamp");
+                eprintln!("failed to generate timestamp");
                 return Err(UidError::GenerateError);
             }
         };
