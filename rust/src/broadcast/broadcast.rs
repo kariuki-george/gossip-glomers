@@ -136,7 +136,7 @@ impl Service {
                 broadcast_event_message_id: match uid.generate_int_unique_id().await {
                     Ok(id) => id,
                     Err(err) => {
-                        log::error!("failed to generate unique int id: {:?}", err);
+                        eprintln!("failed to generate unique int id: {:?}", err);
                         continue;
                     }
                 },
