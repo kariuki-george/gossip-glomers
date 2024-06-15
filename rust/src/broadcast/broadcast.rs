@@ -152,9 +152,10 @@ impl Service {
             messages.push(broadcast_message);
         }
 
-        for data in messages {
-            self.broadcast(data)
-        }
+        // Choose to send message immediately or gossip the messages in the worker below
+        // for data in messages {
+        //     self.broadcast(data)
+        // }
     }
 
     fn broadcast(&mut self, data: BMessage) {
@@ -187,7 +188,7 @@ impl Service {
 
 async fn handle_broadworker(service: Arc<Mutex<Service>>) {
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(40)).await;
 
         // Rebroadcast
 
@@ -197,10 +198,6 @@ async fn handle_broadworker(service: Arc<Mutex<Service>>) {
         let messages = st.store.db.get_messages_as_value();
 
         for message in messages {
-            // Resend message after 20ms to prevent flooding the network
-            if message.timestamp.elapsed() > tokio::time::Duration::from_millis(20) {
-                continue;
-            }
             st.broadcast(message);
         }
     }
