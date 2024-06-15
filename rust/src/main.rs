@@ -11,7 +11,6 @@ async fn main() {
 
     for line in input_lines.lines() {
         let line = line.unwrap();
-        // Try to deserialize the input into a struct
 
         let message = match transport.handleinput(line) {
             Ok(message) => message,

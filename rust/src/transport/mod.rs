@@ -23,17 +23,15 @@ impl Transport {
 }
 
 fn handle_serialization_error(error: serde_json::Error, message: Message) {
-    log::error!(
+    eprintln!(
         "failed to serialize message: \n Message: {:?} \n err: {:?} ",
-        message,
-        error
+        message, error
     )
 }
 
 fn handle_deserialization_error(error: serde_json::Error, input: String) {
-    log::warn!(
+    eprintln!(
         "failed to deserialize input: \n Input {} \n err {:?}",
-        input,
-        error
+        input, error
     )
 }
