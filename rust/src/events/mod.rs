@@ -93,6 +93,52 @@ pub enum Event {
         #[serde(flatten)]
         generate_ok: GenerateOk,
     },
+    Send {
+        #[serde(flatten)]
+        send: SendEvent,
+        #[serde(flatten)]
+        shared: SharedEvent,
+    },
+    SendOk {
+        #[serde(flatten)]
+        event_response: EventResponse,
+        #[serde(flatten)]
+        send_ok: SendOkEvent,
+    },
+    Poll {
+        #[serde(flatten)]
+        poll: PollEvent,
+        #[serde(flatten)]
+        shared: SharedEvent,
+    },
+    PollOk {
+        #[serde(flatten)]
+        event_response: EventResponse,
+        #[serde(flatten)]
+        poll_ok: PollOkEvent,
+    },
+    CommitOffsets {
+        #[serde(flatten)]
+        commit_offsets: CommitOffsetsEvent,
+        #[serde(flatten)]
+        shared: SharedEvent,
+    },
+    CommitOffsetsOk {
+        #[serde(flatten)]
+        event_response: EventResponse,
+    },
+    ListCommittedOffsets {
+        #[serde(flatten)]
+        list_committed_offsets: ListCommittedOffsets,
+        #[serde(flatten)]
+        shared: SharedEvent,
+    },
+    ListCommittedOffsetsOk {
+        #[serde(flatten)]
+        event_response: EventResponse,
+        #[serde(flatten)]
+        list_committed_offsets_ok: ListCommittedOffsetsOk,
+    },
 }
 
 // Shared
@@ -155,4 +201,42 @@ pub struct ReadEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadOkEvent {
     pub messages: Vec<serde_json::Value>,
+}
+
+// Log
+// Send
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendEvent {
+    pub key: String,
+    pub msg: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendOkEvent {
+    pub offset: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PollEvent {
+    pub offsets: HashMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PollOkEvent {
+    pub msgs: HashMap<String, Vec<Vec<serde_json::Value>>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitOffsetsEvent {
+    pub offsets: HashMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListCommittedOffsets {
+    pub keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListCommittedOffsetsOk {
+    pub offsets: HashMap<String, u64>,
 }

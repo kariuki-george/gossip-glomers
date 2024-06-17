@@ -4,6 +4,7 @@ use crate::{
     broadcast::broadcast::{BroadCastMessage, Broadcast},
     db::db::DB,
     events::*,
+    log::log::KLog,
     uid::unique_id::UID,
 };
 
@@ -13,6 +14,7 @@ pub struct Node {
     uid: UID,
     broadcast: Broadcast,
     db: DB<String, Value>,
+    klog: KLog,
 }
 
 impl Node {
@@ -22,6 +24,7 @@ impl Node {
             db: DB::new(),
             node_id: String::new(),
             uid: UID::new(),
+            klog: KLog::new(),
         }
     }
 
@@ -47,6 +50,21 @@ impl Node {
             } => self.handle_read_ok(event_response, read_ok),
             Event::Generate { shared } => self.handle_generate(shared).await,
             Event::GenerateOk { .. } => None,
+
+            Event::Send { send, shared } => self.handle_send(shared, send),
+            Event::SendOk { .. } => None,
+            Event::Poll { poll, shared } => self.handle_poll(poll, shared),
+            Event::PollOk { .. } => None,
+            Event::CommitOffsets {
+                commit_offsets,
+                shared,
+            } => self.handle_commit_offsets(commit_offsets, shared),
+            Event::CommitOffsetsOk { .. } => None,
+            Event::ListCommittedOffsets {
+                list_committed_offsets,
+                shared,
+            } => self.handle_list_committed_offsets(list_committed_offsets, shared),
+            Event::ListCommittedOffsetsOk { .. } => None,
         }
     }
 
@@ -302,5 +320,88 @@ impl Node {
                 },
             },
         })
+    }
+
+    // Log
+
+    fn handle_send(&mut self, shared: SharedEvent, send: SendEvent) -> Option<Message> {
+        let offset = self.klog.handle_append(send.key, send.msg);
+
+        let message = Message {
+            src: String::new(),
+            dest: String::new(),
+            body: Body {
+                typ: Event::SendOk {
+                    event_response: EventResponse {
+                        in_reply_to: shared.msg_id,
+                    },
+                    send_ok: SendOkEvent { offset },
+                },
+            },
+        };
+
+        Some(message)
+    }
+    fn handle_poll(&mut self, data: PollEvent, shared: SharedEvent) -> Option<Message> {
+        let messages = self.klog.handle_poll(data.offsets);
+
+        let message = Message {
+            src: String::new(),
+            dest: String::new(),
+            body: Body {
+                typ: Event::PollOk {
+                    event_response: EventResponse {
+                        in_reply_to: shared.msg_id,
+                    },
+                    poll_ok: PollOkEvent { msgs: messages },
+                },
+            },
+        };
+
+        Some(message)
+    }
+    fn handle_commit_offsets(
+        &mut self,
+        data: CommitOffsetsEvent,
+        shared: SharedEvent,
+    ) -> Option<Message> {
+        self.klog.handle_commit_offsets(data.offsets);
+
+        let message = Message {
+            src: String::new(),
+            dest: String::new(),
+            body: Body {
+                typ: Event::CommitOffsetsOk {
+                    event_response: EventResponse {
+                        in_reply_to: shared.msg_id,
+                    },
+                },
+            },
+        };
+
+        Some(message)
+    }
+
+    fn handle_list_committed_offsets(
+        &mut self,
+        data: ListCommittedOffsets,
+        shared: SharedEvent,
+    ) -> Option<Message> {
+        let offsets = self.klog.handle_list_committed_offsets(data.keys);
+
+        let message = Message {
+            src: String::new(),
+            dest: String::new(),
+            body: Body {
+                typ: Event::ListCommittedOffsetsOk {
+                    event_response: EventResponse {
+                        in_reply_to: shared.msg_id,
+                    },
+                    list_committed_offsets_ok: ListCommittedOffsetsOk { offsets },
+                },
+            },
+        };
+
+        Some(message)
     }
 }
